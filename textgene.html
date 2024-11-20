@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>コード編集ソフト</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: monospace;
+            font-size: 18px;
+            overflow-y: auto;
+        }
+        .input-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        input, select, textarea {
+            border: 1px solid #000;
+            padding: 4px;
+            font-size: 16px;
+        }
+        textarea {
+            width: 120px;
+            height: auto;
+            min-height: 24px;
+            resize: vertical;
+            overflow: hidden;
+        }
+        .color-input {
+            display: none;
+        }
+        #output {
+            margin-top: 20px;
+            border: 1px solid #000;
+            padding: 10px;
+            background-color: #ffffff;
+            cursor: pointer;
+            user-select: all;
+            text-align: left;
+            white-space: pre-wrap;
+            overflow: auto;
+            max-width: 100%;
+        }
+        button {
+            font-size: 16px;
+            padding: 5px 10px;
+            margin: 5px;
+        }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        #jsonInputArea {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>コード編集ソフト</h1>
+    <input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)">
+    <div id="inputArea">
+        <div class="input-container">
+            <span>{ "text": "</span>
+            <textarea class="text-input" placeholder="AAA" oninput="adjustTextareaHeight(this)"></textarea>
+            <span>", "color": "</span>
+            <select class="color-select" onchange="toggleCustomColor(this)">
+                <option value="#c80000">ドズル</option>
+                <option value="#733c93">ぼん</option>
+                <option value="#fcc700">おんりー</option>
+                <option value="#54c3f1">おらふくん</option>
+                <option value="#eb6d9a">MEN</option>
+                <option value="custom">その他</option>
+            </select>
+            <input type="text" class="color-input" placeholder="例: #123456 または green">
+            <span>", "fontSize": "</span>
+            <input type="number" class="font-size-input" placeholder="CCC">
+            <span>px", "textColor": "</span>
+            <input type="text" class="text-color-input" placeholder="DDD">
+            <span>" }</span>
+        </div>
+    </div>
+    <div>
+        <button onclick="addNewInput()">追加</button>
+        <button onclick="removeLastInput()">減らす</button>
+    </div>
+    <div class="button-container">
+        <button onclick="generateCode()">コード生成</button>
+        <button onclick="shuffleCode()">ランダム並べ替え</button>
+        <button onclick="importJSON()">JSONを逆輸入</button>
+    </div>
+    <textarea id="jsonInputArea" placeholder="ここにJSONを貼り付けてインポート"></textarea>
+    <pre id="output" onclick="copyToClipboard()">生成されたコードはここに表示されます</pre>
+
+    <script>
+        function loadCSV(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csv = e.target.result;
+                const rows = parseCSV(csv);
+                populateFields(rows);
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCSV(data) {
+            const rows = [];
+            let currentRow = [];
+            let inQuotes = false;
+            let currentCell = '';
+
+            for (let i = 0; i < data.length; i++) {
+                const char = data[i];
+                const nextChar = data[i + 1];
+
+                if (char === '"' && nextChar === '"') {
+                    currentCell += '"';
+                    i++;
+                } else if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    currentRow.push(currentCell.trim());
+                    currentCell = '';
+                } else if (char === '\n' && !inQuotes) {
+                    currentRow.push(currentCell.trim());
+                    rows.push(currentRow);
+                    currentRow = [];
+                    currentCell = '';
+                } else {
+                    currentCell += char;
+                }
+            }
+            if (currentCell || currentRow.length) {
+                currentRow.push(currentCell.trim());
+                rows.push(currentRow);
+            }
+            return rows;
+        }
+
+        function populateFields(rows) {
+            const inputArea = document.getElementById('inputArea');
+            inputArea.innerHTML = '';
+
+            rows.forEach(row => {
+                if (row.length > 0) {
+                    const text = row[0].replace(/\\n/g, "\n").trim();
+                    const customColor = row[1] ? row[1].trim() : '';
+                    const fontSize = (row[2] && row[2].trim().toLowerCase() === 'small') ? '14' : '';
+                    const textColor = row[3] ? row[3].trim() : 'white';
+
+                    let selectedOption = '';
+                    switch (customColor) {
+                        case 'ドズル':
+                            selectedOption = '#c80000';
+                            break;
+                        case 'ぼん':
+                            selectedOption = '#733c93';
+                            break;
+                        case 'おんりー':
+                            selectedOption = '#fcc700';
+                            break;
+                        case 'おらふくん':
+                            selectedOption = '#54c3f1';
+                            break;
+                        case 'MEN':
+                            selectedOption = '#eb6d9a';
+                            break;
+                        default:
+                            if (customColor) {
+                                selectedOption = 'custom';
+                            }
+                            break;
+                    }
+
+                    const inputContainer = document.createElement('div');
+                    inputContainer.classList.add('input-container');
+                    inputContainer.innerHTML = `
+                        <span>{ "text": "</span>
+                        <textarea class="text-input" placeholder="AAA" oninput="adjustTextareaHeight(this)">${text}</textarea>
+                        <span>", "color": "</span>
+                        <select class="color-select" onchange="toggleCustomColor(this)">
+                            <option value="#c80000" ${selectedOption === '#c80000' ? 'selected' : ''}>ドズル</option>
+                            <option value="#733c93" ${selectedOption === '#733c93' ? 'selected' : ''}>ぼん</option>
+                            <option value="#fcc700" ${selectedOption === '#fcc700' ? 'selected' : ''}>おんりー</option>
+                            <option value="#54c3f1" ${selectedOption === '#54c3f1' ? 'selected' : ''}>おらふくん</option>
+                            <option value="#eb6d9a" ${selectedOption === '#eb6d9a' ? 'selected' : ''}>MEN</option>
+                            <option value="custom" ${selectedOption === 'custom' ? 'selected' : ''}>その他</option>
+                        </select>
+                        <input type="text" class="color-input" placeholder="例: #123456 または green" style="display: ${selectedOption === 'custom' ? 'inline-block' : 'none'};" value="${selectedOption === 'custom' ? customColor : ''}">
+                        <span>", "fontSize": "</span>
+                        <input type="number" class="font-size-input" placeholder="CCC" value="${fontSize}">
+                        <span>px", "textColor": "</span>
+                        <input type="text" class="text-color-input" placeholder="DDD" value="${textColor}">
+                        <span>" }</span>
+                    `;
+                    inputArea.appendChild(inputContainer);
+                }
+            });
+        }
+
+        function toggleCustomColor(selectElement) {
+            const colorInput = selectElement.nextElementSibling;
+            const textColorInput = selectElement.closest('.input-container').querySelector('.text-color-input');
+
+            if (selectElement.value === 'custom') {
+                colorInput.style.display = 'inline-block';
+            } else {
+                colorInput.style.display = 'none';
+                colorInput.value = '';
+            }
+
+            if (selectElement.value === '#fcc700') {
+                textColorInput.value = '#000000';
+            }
+        }
+
+        function addNewInput() {
+            const inputContainer = document.createElement('div');
+            inputContainer.classList
+            add('input-container');
+            inputContainer.innerHTML = `
+                <span>{ "text": "</span>
+                <textarea class="text-input" placeholder="AAA" oninput="adjustTextareaHeight(this)"></textarea>
+                <span>", "color": "</span>
+                <select class="color-select" onchange="toggleCustomColor(this)">
+                    <option value="#c80000">ドズル</option>
+                    <option value="#733c93">ぼん</option>
+                    <option value="#fcc700">おんりー</option>
+                    <option value="#54c3f1">おらふくん</option>
+                    <option value="#eb6d9a">MEN</option>
+                    <option value="custom">その他</option>
+                </select>
+                <input type="text" class="color-input" placeholder="例: #123456 または green" style="display: none;">
+                <span>", "fontSize": "</span>
+                <input type="number" class="font-size-input" placeholder="CCC">
+                <span>px", "textColor": "</span>
+                <input type="text" class="text-color-input" placeholder="DDD">
+                <span>" }</span>
+            `;
+            document.getElementById('inputArea').appendChild(inputContainer);
+            inputContainer.scrollIntoView({ behavior: 'smooth', block: 'end' }); // 追加後にスクロール
+        }
+
+        function removeLastInput() {
+            const inputArea = document.getElementById('inputArea');
+            if (inputArea.children.length > 1) {
+                inputArea.removeChild(inputArea.lastElementChild);
+            } else {
+                alert('これ以上削除できません');
+            }
+        }
+
+        function generateCode() {
+            const textInputs = document.querySelectorAll('.text-input');
+            const colorSelects = document.querySelectorAll('.color-select');
+            const colorInputs = document.querySelectorAll('.color-input');
+            const fontSizeInputs = document.querySelectorAll('.font-size-input');
+            const textColorInputs = document.querySelectorAll('.text-color-input');
+
+            let codes = [];
+            for (let i = 0; i < textInputs.length; i++) {
+                let text = textInputs[i].value.replace(/\n/g, "<br>"); // 改行を<br>に変換
+                const color = colorSelects[i].value === 'custom' ? colorInputs[i].value : colorSelects[i].value;
+                const fontSize = fontSizeInputs[i].value || '16'; // 空欄の場合は16を使用
+                const textColor = textColorInputs[i].value || 'white'; // 空欄の場合はwhiteを使用
+
+                codes.push({ text, color, fontSize: `${fontSize}px`, textColor });
+            }
+
+            const output = document.getElementById('output');
+            output.textContent = JSON.stringify(codes, null, 4);
+        }
+
+        function shuffleCode() {
+            const output = document.getElementById('output');
+            if (output.textContent.trim().startsWith('[')) {
+                let codes = JSON.parse(output.textContent);
+                for (let i = codes.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [codes[i], codes[j]] = [codes[j], codes[i]];
+                }
+                output.textContent = JSON.stringify(codes, null, 4);
+            } else {
+                alert('先にコードを生成してください');
+            }
+        }
+
+        function copyToClipboard() {
+            const output = document.getElementById('output');
+            const range = document.createRange();
+            range.selectNodeContents(output);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            document.execCommand('copy');
+            alert('コードがコピーされました');
+        }
+
+        function adjustTextareaHeight(textarea) {
+            textarea.style.height = 'auto'; // 高さをリセット
+            textarea.style.height = textarea.scrollHeight + 'px'; // 内容に合わせて高さを再設定
+        }
+
+        function importJSON() {
+            const jsonInput = document.getElementById('jsonInputArea').value;
+            try {
+                const jsonData = JSON.parse(jsonInput);
+                document.getElementById('output').textContent = JSON.stringify(jsonData, null, 4);
+                alert('JSONをインポートしました');
+            } catch (error) {
+                alert('無効なJSONです');
+            }
+        }
+    </script>
+</body>
+</html>
